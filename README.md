@@ -30,10 +30,9 @@ knbox auth login
 knbox auth whoami --json
 ```
 
-For non-interactive agents, issue a token from the KN Box web UI and export it:
+For non-interactive agents, issue a token from the KN Box web UI and export it. The default server is already `https://box.beforeve.com`, so `KNBOX_URL` is only needed for a different server.
 
 ```bash
-export KNBOX_URL=https://box.beforeve.com
 export KNBOX_TOKEN=knbox_xxx
 knbox auth whoami --json
 ```
