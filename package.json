@@ -1,0 +1,22 @@
+{
+  "name": "knbox-cli",
+  "version": "0.1.0",
+  "description": "Command line client for uploading files to KN Box.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "knbox": "bin/knbox.js"
+  },
+  "files": [
+    "bin",
+    "src/cli",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "node --check bin/knbox.js && node --check src/cli/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
