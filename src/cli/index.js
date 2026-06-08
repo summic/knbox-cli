@@ -8,6 +8,13 @@ import { promises as fs } from "node:fs";
 const CONFIG_DIR = path.join(os.homedir(), ".config", "knbox");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 const DEFAULT_SERVER_URL = "https://box.beforeve.com";
+const MAX_SINGLE_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_FILES = 200;
+const MAX_UPLOAD_TOTAL_BYTES = 200 * 1024 * 1024;
+const MAX_UPLOAD_DEPTH = 12;
+const MAX_UPLOAD_SCAN_ITEMS = 20000;
+const MAX_UPLOAD_PATH_LENGTH = 512;
+const MAX_UPLOAD_SEGMENT_LENGTH = 120;
 const ALLOWED_FILE_EXTENSIONS = new Set([
   ".md",
   ".markdown",
@@ -239,8 +246,9 @@ async function upload(args) {
   const local = args._[1];
   if (!local) throw new CliError("Usage: knbox upload <file-or-dir>");
   const localPath = path.resolve(process.cwd(), local);
-  const stat = await fs.stat(localPath).catch(() => null);
+  const stat = await fs.lstat(localPath).catch(() => null);
   if (!stat) throw new CliError(`Local path does not exist: ${local}`);
+  if (stat.isSymbolicLink()) throw new CliError("Refusing to upload a symbolic link.");
 
   const conflictMode = args.overwrite ? "overwrite" : args.rename ? "rename" : "error";
   const targetDir = resolveRemotePath(args.to || "", config.cwd);
@@ -248,7 +256,9 @@ async function upload(args) {
     ? await collectLocalFiles(localPath, path.basename(localPath))
     : [{ abs: localPath, rel: path.basename(localPath), size: stat.size }];
 
-  if (!files.length) throw new CliError("No supported files found to upload.");
+  const uploadable = files.filter((file) => !file.ignored && isAllowedUploadPath(file.rel));
+  assertUploadBatch(uploadable);
+  if (!uploadable.length) throw new CliError("No supported files found to upload.");
   const uploaded = [];
   const skipped = [];
   for (const file of files) {
@@ -379,19 +389,32 @@ async function createLoginListener({ state, serverUrl }) {
 
 async function collectLocalFiles(root, rootName) {
   const result = [];
-  await walk(root, rootName);
+  const budget = { scanned: 0 };
+  await walk(root, rootName, 0, budget);
   return result;
 
-  async function walk(abs, rel) {
+  async function walk(abs, rel, depth, budget) {
+    budget.scanned += 1;
+    if (budget.scanned > MAX_UPLOAD_SCAN_ITEMS) {
+      throw new CliError(`Local upload scan exceeded ${MAX_UPLOAD_SCAN_ITEMS} items.`);
+    }
+    assertUploadRelPath(rel);
+    if (depth > MAX_UPLOAD_DEPTH) {
+      throw new CliError(`Upload directory is too deep. Maximum depth is ${MAX_UPLOAD_DEPTH}.`);
+    }
     const name = path.basename(abs);
     if (isIgnoredPart(name)) {
       result.push({ abs, rel, ignored: true });
       return;
     }
-    const stat = await fs.stat(abs);
+    const stat = await fs.lstat(abs);
+    if (stat.isSymbolicLink()) {
+      result.push({ abs, rel, ignored: true });
+      return;
+    }
     if (stat.isDirectory()) {
       const entries = await fs.readdir(abs);
-      for (const entry of entries) await walk(path.join(abs, entry), path.posix.join(rel, entry));
+      for (const entry of entries) await walk(path.join(abs, entry), path.posix.join(rel, entry), depth + 1, budget);
       return;
     }
     if (stat.isFile()) result.push({ abs, rel, size: stat.size });
@@ -475,6 +498,32 @@ function cleanServerUrl(value) {
 
 function isAllowedUploadPath(name) {
   return ALLOWED_FILE_EXTENSIONS.has(path.extname(String(name || "")).toLowerCase());
+}
+
+function assertUploadBatch(files) {
+  if (files.length > MAX_UPLOAD_FILES) {
+    throw new CliError(`Too many files. Upload at most ${MAX_UPLOAD_FILES} files at a time.`);
+  }
+  const oversized = files.find((file) => (file.size || 0) > MAX_SINGLE_UPLOAD_BYTES);
+  if (oversized) {
+    throw new CliError(`File is too large: ${oversized.rel}. Upload files up to ${formatBytes(MAX_SINGLE_UPLOAD_BYTES)}.`);
+  }
+  const total = files.reduce((sum, file) => sum + (file.size || 0), 0);
+  if (total > MAX_UPLOAD_TOTAL_BYTES) {
+    throw new CliError(`Upload is too large. Upload at most ${formatBytes(MAX_UPLOAD_TOTAL_BYTES)} at a time.`);
+  }
+}
+
+function assertUploadRelPath(rel) {
+  const parts = String(rel || "").replace(/\\/g, "/").split("/").filter(Boolean);
+  if (!parts.length) throw new CliError("Invalid upload path.");
+  if (parts.length > MAX_UPLOAD_DEPTH + 1) throw new CliError(`Upload path is too deep. Maximum depth is ${MAX_UPLOAD_DEPTH}.`);
+  if (parts.join("/").length > MAX_UPLOAD_PATH_LENGTH) {
+    throw new CliError(`Upload path is too long. Maximum length is ${MAX_UPLOAD_PATH_LENGTH} characters.`);
+  }
+  if (parts.some((part) => part === "." || part === ".." || part.length > MAX_UPLOAD_SEGMENT_LENGTH || /[\x00-\x1f]/.test(part))) {
+    throw new CliError("Invalid upload path.");
+  }
 }
 
 function isIgnoredPart(name) {

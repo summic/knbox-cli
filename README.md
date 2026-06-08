@@ -48,6 +48,8 @@ knbox upload <file-or-dir> --json
 
 Uploads fail on conflicts by default. Use `--rename` or `--overwrite` when that is intentional.
 
+Local directory uploads skip symbolic links and hidden files/directories. The CLI only uploads supported Markdown, webpage, and image files, and it enforces the same safety limits as the server: maximum directory depth, maximum file count, maximum single-file size, and maximum total upload size.
+
 ## Agent Output
 
 Agent-facing commands support a stable JSON envelope:
