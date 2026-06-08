@@ -7,7 +7,7 @@ import { promises as fs } from "node:fs";
 
 const CONFIG_DIR = path.join(os.homedir(), ".config", "knbox");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
-const DEFAULT_SERVER_URL = "https://box.beforeve.com";
+const DEFAULT_SERVER_URL = "https://box.kn.run";
 const MAX_SINGLE_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_UPLOAD_FILES = 200;
 const MAX_UPLOAD_TOTAL_BYTES = 200 * 1024 * 1024;

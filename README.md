@@ -5,7 +5,7 @@ Command line client for KN Box.
 KN Box CLI uploads webpages, Markdown files, and images to KN Box and returns public preview URLs. It defaults to:
 
 ```text
-https://box.beforeve.com
+https://box.kn.run
 ```
 
 ## Install
@@ -30,7 +30,7 @@ knbox auth login
 knbox auth whoami --json
 ```
 
-For non-interactive agents, issue a token from the KN Box web UI and export it. The default server is already `https://box.beforeve.com`, so `KNBOX_URL` is only needed for a different server.
+For non-interactive agents, issue a token from the KN Box web UI and export it. The default server is already `https://box.kn.run`, so `KNBOX_URL` is only needed for a different server.
 
 ```bash
 export KNBOX_TOKEN=knbox_xxx
